@@ -1,2 +1,4 @@
--- This file will be downloaded by the bootstrap
--- code which will be available from pastebin.
+-- This file will be downloaded by bootstrap.lua
+-- code which is available from pastebin.
+
+print("Installer script says hello!")
