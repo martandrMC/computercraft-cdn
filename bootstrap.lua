@@ -1,4 +1,4 @@
-function errmsg(msg)
+local function errmsg(msg)
     printError("Bootstrap failure!")
     printError(msg)
     error()
