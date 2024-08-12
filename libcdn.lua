@@ -45,6 +45,7 @@ local function parsePath(path)
         path = string.sub(path, loc + 1)
         if string.find(path, "@") ~= nil then return nil end
     else result.relative = (string.sub(path, 1, 1) ~= "/") end
+    result.local_path = path
 
     result.directories = {}
     if string.find(path, "/") ~= nill then
@@ -94,17 +95,73 @@ local function parseCatalog(self, catalog)
 end
 
 local function fetchDirectory(self, code)
-    -- TODO
+    local fname = self.work_dir .. dircache .. self.curr_cat.name .. "/"
+    if not fs.exists(fname) then fs.makeDir(fname) end
+    if self.curr_cat.safe then
+        local check = (string.find(code, "[^A-Za-z0-9-_]") == nil)
+        if check then fname = fname .. code .. ".sav"
+        else return nil, "Unsafe code in reportedly safe catalog!" end
+    else fname = fname .. base64Encode(code) .. ".sav" end
+
+    if not fs.exists(fname) then
+        local hyperlink = self.curr_cat.host .. code
+        local handle, errtxt, failhandle = http.get(hyperlink)
+        if not handle then return nil, failhandle.getResponseCode() .. ": " .. errtxt end
+        local content = handle.readAll()
+        handle.close()
+
+        local handle, errtxt = fs.open(fname, "w")
+        if not handle then return nil, errtxt end
+        handle.write(content)
+        handle.close()
+    end
+
+    return fname
 end
 
 local function parseDirectory(self, fname)
-    -- TODO
-    return {}
+    local result = {}
+    result.files = {}
+
+    local handle, errtxt = fs.open(fname, "r")
+    if not handle then return nil, errtxt end
+    while true do
+        local line = handle.readLine()
+        if not line then break end
+        local iter = string.gmatch(line, "%S+")
+        local header = iter()
+        if header == "$" then
+            local type = iter()
+            if type == "dir" then
+                result.is_root = false
+                result.parent = iter()
+                if not result.parent then return nil, "Malformed directory header!" end
+            elseif type == "cat" then
+                result.is_root = true
+                if self.curr_cat.name ~= iter() then return nil, "Catalog name mismatch!" end
+            else return nil, "Directory type error!" end
+        else
+            local file = {}
+            local name = iter()
+            if not name then return nil, "Malformed directory entry!" end
+            file.type = header
+            file.code = iter()
+            if not file.code then return nil, "Malformed directory entry!" end
+            result.files[name] = file
+        end
+    end
+    handle.close()
+
+    return result
 end
 
 ------------------------
 -- Exported Functions --
 ------------------------
+
+function exports.getPath(self)
+    return self.curr_cat.name .. "@" .. self.curr_path
+end
 
 function exports.listCatalogs(self)
     local result = fs.list(self.work_dir .. catalogs)
@@ -116,20 +173,47 @@ function exports.listCatalogs(self)
 end
 
 function exports.changeCatalog(self, catalog)
-    local result, errtxt = parseCatalog(self, catalog)
-    if not result then return false, errtxt end
-    self.curr_cat = result
+    local new_cat, errtxt = parseCatalog(self, catalog)
+    if not new_cat then return false, errtxt end
+    self.curr_cat = new_cat
     self.curr_path = "/"
-    local fname = fetchDirectory(self, self.curr_cat.code)
-    self.curr_dir = parseDirectory(fname)
+
+    local fname, errtxt = fetchDirectory(self, self.curr_cat.code)
+    if not fname then return false, errtxt end
+
+    local new_dir, errtxt = parseDirectory(self, fname)
+    if not new_dir then return false, errtxt end
+    self.curr_dir = new_dir
+
     return true
 end
 
 function exports.changeDirectory(self, path)
-    local parts = parsePath(path)
-    if not parts then return false, "Malformed path!" end
+    local path = parsePath(path)
+    if not path then return false, "Malformed path!" end
 
-    -- TODO
+    if path.catalog ~= nil then
+        local succ, errtxt = self:changeCatalog(path.catalog)
+        if not succ then return false, errtxt end
+    elseif not path.relative then
+        local succ, errtxt = self:changeCatalog(self.curr_cat.name)
+        if not succ then return false, errtxt end
+    end
+
+    for i,v in ipairs(path.directories) do
+        local entry = self.curr_dir.files[v]
+        if not entry then return false, "Directory not found!" end
+        if entry.type ~= "dir" then return false, "Not a directory!" end
+
+        local result, errtxt = fetchDirectory(self, entry.code)
+        if not result then return false, errtxt end
+        local result, errtxt = parseDirectory(self, result)
+        if not result then return false, errtxt end
+
+        self.curr_dir = result
+    end
+
+    self.curr_path = path.local_path
     return true
 end
 
