@@ -62,7 +62,7 @@ end
 
 local function parseCatalog(self, catalog)
     local fname = self.work_dir .. catalogs .. catalog .. ".cat"
-    if not fs.exists(fname) then return nil, "Catalog doesn't exist!" end
+    if not fs.exists(fname) then return nil, "Catalog not found!" end
     local result = {}
 
     local handle = fs.open(fname, "r")
@@ -121,7 +121,7 @@ end
 
 local function parseDirectory(self, fname)
     local result = {}
-    result.files = {}
+    result.entries = {}
 
     local handle, errtxt = fs.open(fname, "r")
     if not handle then return nil, errtxt end
@@ -141,13 +141,13 @@ local function parseDirectory(self, fname)
                 if self.curr_cat.name ~= iter() then return nil, "Catalog name mismatch!" end
             else return nil, "Directory type error!" end
         else
-            local file = {}
+            local entry = {}
             local name = iter()
             if not name then return nil, "Malformed directory entry!" end
-            file.type = header
-            file.code = iter()
-            if not file.code then return nil, "Malformed directory entry!" end
-            result.files[name] = file
+            entry.type = header
+            entry.code = iter()
+            if not entry.code then return nil, "Malformed directory entry!" end
+            result.entries[name] = entry
         end
     end
     handle.close()
@@ -159,17 +159,27 @@ end
 -- Exported Functions --
 ------------------------
 
-function exports.getPath(self)
-    return self.curr_cat.name .. "@" .. self.curr_path
-end
+function exports.addCatalog(self, name)
+    local entry = self.curr_dir.entries[name]
+    if not entry then return nil, "Catalog not found!" end
+    if entry.type ~= "cat" then return nil, "Not a catalog!" end
 
-function exports.listCatalogs(self)
-    local result = fs.list(self.work_dir .. catalogs)
-    for i, v in ipairs(result) do
-        local limit = string.len(result[i]) - 4
-        result[i] = string.sub(result[i], 0, limit)
-    end
-    return result
+    local hyperlink = self.curr_cat.host .. entry.code
+    local handle, errtxt, failhandle = http.get(hyperlink)
+    if not handle then return nil, failhandle.getResponseCode() .. ": " .. errtxt end
+    local content = handle.readAll()
+    handle.close()
+
+    local name = string.gsub(content, ".*name (%S+).*", "%1")
+    local fname = self.work_dir .. catalogs .. name .. ".cat"
+    if fs.exists(fname) then return nil, "Catalog has already been added!" end
+
+    local handle, errtxt = fs.open(fname, "w")
+    if not handle then return nil, errtxt end
+    handle.write(content)
+    handle.close()
+
+    return name
 end
 
 function exports.changeCatalog(self, catalog)
@@ -183,6 +193,7 @@ function exports.changeCatalog(self, catalog)
 
     local new_dir, errtxt = parseDirectory(self, fname)
     if not new_dir then return false, errtxt end
+    if not new_dir.is_root then return false, "Catalog root not marked as root!" end
     self.curr_dir = new_dir
 
     return true
@@ -201,7 +212,7 @@ function exports.changeDirectory(self, path)
     end
 
     for i,v in ipairs(path.directories) do
-        local entry = self.curr_dir.files[v]
+        local entry = self.curr_dir.entries[v]
         if not entry then return false, "Directory not found!" end
         if entry.type ~= "dir" then return false, "Not a directory!" end
 
@@ -217,9 +228,87 @@ function exports.changeDirectory(self, path)
     return true
 end
 
--- The library, when require()'d, returns
--- a constructor function that mandates
--- correct initialization
+--------------------------------------------------
+
+function exports.getSavedCatalogs(self)
+    local result = fs.list(self.work_dir .. catalogs)
+    for i, v in ipairs(result) do
+        local limit = string.len(result[i]) - 4
+        result[i] = string.sub(result[i], 0, limit)
+    end
+    return result
+end
+
+function exports.getCatalogs(self)
+    local result = {}
+    for k,v in pairs(self.curr_dir.entries) do
+        if v.type == "cat" then table.insert(result, k) end
+    end
+    return result
+end
+
+function exports.getDirectories(self)
+    local result = {}
+    for k,v in pairs(self.curr_dir.entries) do
+        if v.type == "dir" then table.insert(result, k) end
+    end
+    return result
+end
+
+function exports.getDirectoryEntries(self)
+    local result = {}
+    for k,v in pairs(self.curr_dir.entries) do
+        result[k] = v.type
+    end
+    return result
+end
+
+function exports.getFiles(self, filter)
+    local result = {}
+    for k,v in pairs(self.curr_dir.entries) do
+        if not (v.type == "cat" or v.type == "dir") then
+            if filter ~= nil and v.type == filter then
+                table.insert(result, k)
+            end
+        end
+    end
+    return result
+end
+
+--------------------------------------------------
+
+function exports.getPath(self)
+    return self.curr_cat.name .. "@" .. self.curr_path
+end
+
+function exports.getFile(self, name)
+    local entry = self.curr_dir.entries[name]
+    if not entry then return nil, "File not found!" end
+    if entry.type == "cat" or entry.type == "dir" then return nil, "Not a file!" end
+
+    local hyperlink = self.curr_cat.host .. entry.code
+    local handle, errtxt, failhandle = http.get(hyperlink)
+    if not handle then return nil, failhandle.getResponseCode() .. ": " .. errtxt end
+    return handle, entry.type
+end
+
+function exports.clearCache(self, catalog)
+    if not catalog then
+        local list = fs.list(self.work_dir .. dircache)
+        for i,v in ipairs(list) do fs.delete(self.work_dir .. dircache .. v) end
+    else
+        local fname = self.work_dir .. catalogs .. catalog .. ".cat"
+        if not fs.exists(fname) then return false, "Catalog doesn't exist!" end
+        fs.delete(self.work_dir .. dircache .. catalog)
+    end
+    return true
+end
+
+-- The library, when require()'d, returns a constructor function that mandates
+-- correct initialization. To successfully initialize the library, provide it
+-- a directory wherein catalogs and cached directories will be located. An
+-- initial catalog is required so that the library is always in a valid state.
+-- The library will be initialized pointing at the root of the initial catalog.
 return function (work_dir, initial_catalog)
     local new = {}
     for k,v in pairs(exports) do new[k] = v end
