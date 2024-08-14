@@ -34,8 +34,9 @@ end
 local lib, errtxt = require("libcdn")("/libcdn/", "main")
 if not lib then printError(errtxt) return end
 
+lib:addCatalog("mart-music")
 lib:changeDirectory("mart@/")
 parallel.waitForAny(
-    function () playAudio(lib:getFile("uranium-fever")) end
+    function () playAudio(lib:getFile("uranium-fever")) end,
     function () while true do print("Playing") os.sleep(1) end end
 )
