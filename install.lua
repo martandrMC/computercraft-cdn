@@ -14,7 +14,7 @@ local tasks = {
 
 local function taskDownload(file, location)
     local link_prefix = "https://raw.githubusercontent.com/martandrMC/computercraft-cdn/master"
-    term.write(string.format("Performing download task: %s -> %s ... ", file, location))
+    write(string.format("Performing download task: %s -> %s ... ", file, location))
     local handle, errtxt, failhandle = http.get(link_prefix .. file)
     if not handle then printError("Fail!") return false end
     local content = handle.readAll()
@@ -30,7 +30,7 @@ local function taskDownload(file, location)
 end
 
 local function taskExecute(description, code)
-    term.write(string.format("Performing execute task \"%s\" ... ", description))
+    write(string.format("Performing execute task \"%s\" ... ", description))
     local chunk, errtxt = loadstring(code)
     if not code then printError("Fail!") return false end
     chunk()
@@ -40,7 +40,7 @@ end
 
 print("-- CC CDN Installer Start --")
 for i,v in ipairs(tasks) do
-    term.write(string.format("[%d/%d] ", i, #tasks))
+    write(string.format("[%d/%d] ", i, #tasks))
     if v.type == "download" then taskDownload(v.file, v.location)
     elseif v.type == "execute" then taskExecute(v.description, v.code)
     else printError("Fail!") end
