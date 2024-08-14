@@ -267,7 +267,7 @@ function exports.getFiles(self, filter)
     local result = {}
     for k,v in pairs(self.curr_dir.entries) do
         if not (v.type == "cat" or v.type == "dir") then
-            if filter ~= nil and v.type == filter then
+            if not filter or v.type == filter then
                 table.insert(result, k)
             end
         end
