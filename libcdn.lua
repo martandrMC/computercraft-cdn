@@ -7,6 +7,17 @@ local dircache = "dircache/"
 -- Helper Functions --
 ----------------------
 
+local function deepCopy(original)
+    if type(original) ~= "table" then
+        return original
+    end
+    local copy = {}
+    for k,v in pairs(original) do
+        copy[k] = deepCopy(v)
+    end
+    return copy
+end
+
 local function base64Encode(str)
     local charset = {
         "A", "B", "C", "D", "E", "F", "G", "H",
@@ -183,43 +194,63 @@ function exports.addCatalog(self, name)
 end
 
 function exports.changeCatalog(self, catalog)
+    local old_cat = deepCopy(self.curr_cat)
+    -- local old_dir = deepCopy(self.curr_dir)
+    local old_path = self.curr_path
+    local function restore(errtxt)
+        -- self.curr_dir = old_dir
+        self.curr_cat = old_cat
+        self.curr_path = old_path
+        return false, errtxt
+    end
+
     local new_cat, errtxt = parseCatalog(self, catalog)
-    if not new_cat then return false, errtxt end
+    if not new_cat then return restore(errtxt) end
     self.curr_cat = new_cat
     self.curr_path = "/"
 
     local fname, errtxt = fetchDirectory(self, self.curr_cat.code)
-    if not fname then return false, errtxt end
+    if not fname then return restore(errtxt) end
 
     local new_dir, errtxt = parseDirectory(self, fname)
-    if not new_dir then return false, errtxt end
-    if not new_dir.is_root then return false, "Catalog root not marked as root!" end
+    if not new_dir then return restore(errtxt) end
+    if not new_dir.is_root then return restore("Catalog root not marked as root!") end
     self.curr_dir = new_dir
 
     return true
 end
 
 function exports.changeDirectory(self, path)
+    local old_cat = deepCopy(self.curr_cat)
+    local old_dir = deepCopy(self.curr_dir)
+    -- local old_path = self.curr_path
+    local function restore(errtxt)
+        self.curr_dir = old_dir
+        self.curr_cat = old_cat
+        -- self.curr_path = old_path
+        return false, errtxt
+    end
+
     local path = parsePath(path)
-    if not path then return false, "Malformed path!" end
+    if not path then return restore("Malformed path!") end
 
     if path.catalog ~= nil then
         local succ, errtxt = self:changeCatalog(path.catalog)
-        if not succ then return false, errtxt end
+        if not succ then return restore(errtxt) end
     elseif not path.relative then
         local succ, errtxt = self:changeCatalog(self.curr_cat.name)
-        if not succ then return false, errtxt end
+        if not succ then return restore(errtxt) end
     end
 
     for i,v in ipairs(path.directories) do
         local entry = self.curr_dir.entries[v]
-        if not entry then return false, "Directory not found!" end
-        if entry.type ~= "dir" then return false, "Not a directory!" end
+        if not entry then return restore("Directory not found!") end
+        if entry.type ~= "dir" then return restore("Not a directory!") end
 
         local result, errtxt = fetchDirectory(self, entry.code)
-        if not result then return false, errtxt end
+        if not result then return restore(errtxt) end
         local result, errtxt = parseDirectory(self, result)
-        if not result then return false, errtxt end
+        if not result then return restore(errtxt) end
 
         self.curr_dir = result
     end
