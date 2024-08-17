@@ -31,7 +31,7 @@ local function printDirectory()
 
     for i,n in ipairs(names) do
         local t = dir[n]
-        n = string.sub(n, 0, width - 2)
+        n = string.sub(n, 1, width - 2)
         screen.setCursorPos(1, line)
         screen.blit("| ",
             string.rep(colors.toBlit(base_color), 2),
@@ -55,15 +55,20 @@ while true do
 
     printDirectory()
     screen.write("> ")
-    local path = read(nil, history)
-    local succ, errtxt = lib:changeDirectory(path)
-    if succ then
+    local command = read(nil, history)
+    if string.sub(command, 1, 1) ~= "`" then
+        local succ, errtxt = lib:changeDirectory(command)
+        if succ then
+            screen.clearLine()
+            if history[#history] ~= command then
+                table.insert(history, command)
+            end
+        else screen.blit(errtxt,
+            string.rep(colors.toBlit(colors.red), #errtxt),
+            string.rep(colors.toBlit(colors.black), #errtxt)
+        ) end
+    elseif command == "`exit" then
         screen.clearLine()
-        if history[#history] ~= path then
-            table.insert(history, path)
-        end
-    else screen.blit(errtxt,
-        string.rep(colors.toBlit(colors.red), #errtxt),
-        string.rep(colors.toBlit(colors.black), #errtxt)
-    ) end
+        break
+    end
 end
