@@ -1,6 +1,7 @@
 local lib, errtxt = require("libcdn")("/libcdn/", "main")
 if not lib then printError(errtxt) return end
 local screen = term.current()
+local width, height = screen.getSize()
 
 local base_color = colors.blue
 local type_colors = {
@@ -11,7 +12,6 @@ local type_colors = {
 }
 
 local function printDirectory()
-    local width, height = screen.getSize()
     local path = lib:getPath()
     local start = #path - width + 1
     if start > 0 then  path = string.sub(path, start, #path) end
@@ -24,7 +24,13 @@ local function printDirectory()
 
     local line = 2
     local dir = lib:getDirectoryEntries()
-    for n,t in pairs(dir) do
+    
+    local names = {}
+    for n,t in pairs(dir) do table.insert(names, n) end
+    table.sort(names)
+
+    for i,n in ipairs(names) do
+        local t = dir[n]
         n = string.sub(n, 0, width - 2)
         screen.setCursorPos(1, line)
         screen.blit("| ",
@@ -37,12 +43,27 @@ local function printDirectory()
         )
         line = line + 1
     end
-    screen.setCursorPos(1, height)
+    screen.setCursorPos(1, height - 1)
 end
 
+local history = {}
 while true do
-    screen.clear()
+    for i = 1, height - 1 do
+        screen.setCursorPos(1, i)
+        screen.clearLine()
+    end
+
     printDirectory()
     screen.write("> ")
-    read()
+    local path = read(nil, history)
+    local succ, errtxt = lib:changeDirectory(path)
+    if succ then
+        screen.clearLine()
+        if history[#history] ~= path then
+            table.insert(history, path)
+        end
+    else screen.blit(errtxt,
+        string.rep(colors.toBlit(colors.red), #errtxt),
+        string.rep(colors.toBlit(colors.black), #errtxt)
+    ) end
 end
