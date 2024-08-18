@@ -286,14 +286,6 @@ function exports.getDirectories(self)
     return result
 end
 
-function exports.getDirectoryEntries(self)
-    local result = {}
-    for k,v in pairs(self.curr_dir.entries) do
-        result[k] = v.type
-    end
-    return result
-end
-
 function exports.getFiles(self, filter)
     local result = {}
     for k,v in pairs(self.curr_dir.entries) do
@@ -304,6 +296,20 @@ function exports.getFiles(self, filter)
         end
     end
     return result
+end
+
+function exports.getEntries(self)
+    local result = {}
+    for k,v in pairs(self.curr_dir.entries) do
+        result[k] = v.type
+    end
+    return result
+end
+
+function exports.getEntryType(self, name)
+    local entry = self.curr_dir.entries[name]
+    if not entry then return nil
+    else return entry.type end
 end
 
 --------------------------------------------------
