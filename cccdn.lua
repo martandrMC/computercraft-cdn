@@ -11,11 +11,19 @@ local type_colors = {
     ["lua"] = colors.yellow
 }
 
-local function writeError(str)
+local function writeStatus(str, err)
+    local old_x, old_y = screen.getCursorPos()
+    screen.setCursorPos(1, height)
+    screen.clearLine()
+
+    local text_color = colors.white
+    if err then text_color = colors.red end
     screen.blit(str,
-        string.rep(colors.toBlit(colors.red), #str),
+        string.rep(colors.toBlit(text_color), #str),
         string.rep(colors.toBlit(colors.black), #str)
     )
+
+    screen.setCursorPos(old_x, old_y)
 end
 
 local function printDirectory()
@@ -31,7 +39,7 @@ local function printDirectory()
 
     local line = 2
     local dir = lib:getEntries()
-    
+
     local names = {}
     for n,t in pairs(dir) do table.insert(names, n) end
     table.sort(names)
@@ -76,40 +84,53 @@ local function handleUI()
         local command = read(nil, history)
         local iter = string.gmatch(command, "%S+")
         local first_part = iter()
-        local valid = true
+        local save = true
+
         if string.sub(command, 1, 1) ~= "`" then
             local succ, errtxt = lib:changeDirectory(command)
-            if succ then screen.clearLine()
-            else writeError(errtxt) end
+            if succ then writeStatus("", false)
+            else writeStatus(errtxt, true) save = false end
+        elseif first_part == "`add" then
+            local fname = iter()
+            local ftype = lib:getEntryType(fname)
+            if not ftype then writeStatus("Catalog not found!", true)
+            elseif ftype ~= "cat" then writeStatus("Not a catalog!", true)
+            else
+                local cname, errtxt = lib:addCatalog(fname)
+                if cname ~= nil then
+                    writeStatus(string.format("Added \"%s\" to the local catalogs.", cname), false)
+                else writeStatus(errtxt, true) save = false end
+            end
         elseif first_part == "`exit" then
-            screen.clearLine()
+            writeStatus("", false)
             break
         elseif first_part == "`play" then
-            if playing then writeError("Player is already active!")
+            if playing then writeStatus("Player is already active!", true)
             else os.queueEvent("cccdn_start", iter()) end
         elseif first_part == "`stop" then
-            os.queueEvent("cccdn_stop")
-        else writeError("Unknown command!") valid = false end
-        if valid and history[#history] ~= command then
+            if not playing then writeStatus("Player is already stopped!", true)
+            else os.queueEvent("cccdn_stop") end
+        else writeStatus("Unknown command!", true) save = false end
+        if save and history[#history] ~= command then
             table.insert(history, command)
         end
     end
 end
 
 local function handleMusic()
-    while true do
+    while true do while true do
         playing = false
         local _, fname = os.pullEvent("cccdn_start")
         playing = true
         local ftype = lib:getEntryType(fname)
-        if not ftype then writeError("File not found!") goto continue break
-        elseif ftype ~= "pwm" then writeError("Not a sound file!") goto continue end
+        if not ftype then writeStatus("File not found!", true) break
+        elseif ftype ~= "pwm" then writeStatus("Not a sound file!", true) break end
         local handle, ftype = lib:getFile(fname)
         assert(handle ~= nil and ftype == "pwm")
 
         local speaker = getSpeaker()
-        if not speaker then writeError("No speaker attached!") goto continue
-        else screen.write(string.format("Playing \"%s\" ...", fname)) end
+        if not speaker then writeStatus("No speaker attached!", true) break
+        else writeStatus(string.format("Playing \"%s\" ...", fname), false) end
         local decoder = require("cc.audio.dfpwm").make_decoder()
         while playing do
             local bytes = handle.read(16384)
@@ -125,11 +146,10 @@ local function handleMusic()
                 end
             end
         end
-        screen.write("Finished playing.")
+        writeStatus("Finished playing.", false)
         handle.close()
         speaker.stop()
-        ::continue::
-    end
+    end end
 end
 
 parallel.waitForAny(handleUI, handleMusic)
