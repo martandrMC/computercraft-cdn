@@ -24,7 +24,7 @@ local function taskDownload(file, location)
     if not handle then printError("Fail!") return false end
     handle.write(content)
     handle.close()
-    
+
     print("Success!")
     return true
 end

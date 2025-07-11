@@ -125,8 +125,10 @@ local function handleMusic()
         local ftype = lib:getEntryType(fname)
         if not ftype then writeStatus("File not found!", true) break
         elseif ftype ~= "pwm" then writeStatus("Not a sound file!", true) break end
+
         local handle, ftype = lib:getFile(fname)
-        assert(handle ~= nil and ftype == "pwm")
+        if not handle then writeStatus(ftype, true) break end
+        assert(ftype == "pwm")
 
         local speaker = getSpeaker()
         if not speaker then writeStatus("No speaker attached!", true) break
@@ -135,7 +137,7 @@ local function handleMusic()
         while playing do
             local bytes = handle.read(16384)
             if bytes == nil then break end
-            
+
             local data = decoder(bytes)
             while not speaker.playAudio(data) do
                 while true do

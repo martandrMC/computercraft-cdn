@@ -324,7 +324,7 @@ function exports.getFile(self, name)
     if entry.type == "cat" or entry.type == "dir" then return nil, "Not a file!" end
 
     local hyperlink = self.curr_cat.host .. entry.code
-    local handle, errtxt, failhandle = http.get(hyperlink)
+    local handle, errtxt, failhandle = http.get({url = hyperlink, timeout = 5})
     if not handle then
         if not failhandle then return nil, "Unspecified Error: " .. errtxt
         else return nil, failhandle.getResponseCode() .. ": " .. errtxt end
