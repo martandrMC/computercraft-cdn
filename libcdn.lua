@@ -325,8 +325,10 @@ function exports.getFile(self, name)
 
     local hyperlink = self.curr_cat.host .. entry.code
     local handle, errtxt, failhandle = http.get(hyperlink)
-    if not handle then return nil, failhandle.getResponseCode() .. ": " .. errtxt end
-    return handle, entry.type
+    if not handle then
+        if not failhandle then return nil, "Unspecified Error: " .. errtxt
+        else return nil, failhandle.getResponseCode() .. ": " .. errtxt end
+    else return handle, entry.type end
 end
 
 function exports.clearCache(self, catalog)
