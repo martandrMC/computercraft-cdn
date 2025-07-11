@@ -56,7 +56,6 @@ local function parsePath(path)
         path = string.sub(path, loc + 1)
         if string.find(path, "@") ~= nil then return nil end
     else result.relative = (string.sub(path, 1, 1) ~= "/") end
-    result.local_path = path
 
     result.directories = {}
     if string.find(path, "/") ~= nill then
@@ -64,10 +63,11 @@ local function parsePath(path)
         while true do
             local part = iter()
             if not part then break end
-            table.insert(result.directories, part)
+            if part ~= "." then table.insert(result.directories, part) end
         end
     elseif string.len(path) == 0 then return nil
     else table.insert(result.directories, path) end
+
     return result
 end
 
@@ -223,11 +223,11 @@ end
 function exports.changeDirectory(self, path)
     local old_cat = deepCopy(self.curr_cat)
     local old_dir = deepCopy(self.curr_dir)
-    -- local old_path = self.curr_path
+    local old_path = self.curr_path
     local function restore(errtxt)
         self.curr_dir = old_dir
         self.curr_cat = old_cat
-        -- self.curr_path = old_path
+        self.curr_path = old_path
         return false, errtxt
     end
 
@@ -243,19 +243,26 @@ function exports.changeDirectory(self, path)
     end
 
     for i,v in ipairs(path.directories) do
-        local entry = self.curr_dir.entries[v]
-        if not entry then return restore("Directory not found!") end
-        if entry.type ~= "dir" then return restore("Not a directory!") end
+        local code = nil
+        if v ~= ".." then
+            local entry = self.curr_dir.entries[v]
+            if not entry then return restore("Directory not found!") end
+            if entry.type ~= "dir" then return restore("Not a directory!") end
+            code = entry.code
+        else code = self.curr_dir.parent end
 
-        local result, errtxt = fetchDirectory(self, entry.code)
-        if not result then return restore(errtxt) end
-        local result, errtxt = parseDirectory(self, result)
-        if not result then return restore(errtxt) end
+        if code ~= nil then
+            local result, errtxt = fetchDirectory(self, code)
+            if not result then return restore(errtxt) end
+            local result, errtxt = parseDirectory(self, result)
+            if not result then return restore(errtxt) end
 
-        self.curr_dir = result
+            self.curr_dir = result
+            if v ~= ".." then self.curr_path = self.curr_path .. v .. "/"
+            else self.curr_path = string.gsub(self.curr_path, "[^/]+/$", "") end
+        end
     end
 
-    self.curr_path = path.local_path
     return true
 end
 
