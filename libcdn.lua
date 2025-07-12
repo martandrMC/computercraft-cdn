@@ -321,6 +321,10 @@ end
 
 --------------------------------------------------
 
+function exports.isRoot(self)
+    return self.curr_dir.is_root
+end
+
 function exports.getPath(self)
     return self.curr_cat.name .. "@" .. self.curr_path
 end

@@ -3,6 +3,9 @@ if not lib then printError(errtxt) return end
 local screen = term.current()
 local width, height = screen.getSize()
 
+local running = true
+local playing = false
+
 local base_color = colors.blue
 local type_colors = {
     ["cat"] = colors.blue,
@@ -10,6 +13,8 @@ local type_colors = {
     ["pwm"] = colors.lime,
     ["lua"] = colors.yellow
 }
+
+--------------------------------------------------
 
 local function writeStatus(str, err)
     local old_x, old_y = screen.getCursorPos()
@@ -69,11 +74,71 @@ end
 
 --------------------------------------------------
 
-local playing = false
+local commands = {}
+
+function commands.exit(iter)
+    writeStatus("", false)
+    running = false
+end
+
+function commands.add(iter)
+    local fname = iter()
+    local ftype = lib:getEntryType(fname)
+    if not ftype then writeStatus("Catalog not found!", true)
+    elseif ftype ~= "cat" then writeStatus("Not a catalog!", true)
+    else
+        local cname, errtxt = lib:addCatalog(fname)
+        if cname ~= nil then
+            writeStatus(string.format("Added \"%s\" to the local catalogs.", cname), false)
+        else writeStatus(errtxt, true) save = false end
+    end
+end
+
+function commands.play(iter)
+    if playing then writeStatus("Player is already active!", true)
+    else os.queueEvent("cccdn_start", iter()) end
+end
+
+function commands.stop(iter)
+    if not playing then writeStatus("Player is already stopped!", true)
+    else os.queueEvent("cccdn_stop") end
+end
+
+--------------------------------------------------
+
+local function promptOptions(input)
+    local choice = require("cc.completion").choice
+    local function keyset(tbl)
+        local keys = {}
+        for k,v in pairs(tbl) do
+            table.insert(keys, k)
+        end
+        table.sort(keys)
+        return keys
+    end
+
+    if not input or #input == 0 then return {} end
+
+    local last_part = {}
+    for p in string.gmatch(input, "%S+") do last_part = p end
+
+    if string.sub(last_part, 1, 1) == "`" then
+        local command_names = keyset(commands)
+        return choice(string.sub(last_part, 2, -1), command_names)
+    else
+        local entry_names = keyset(lib:getEntries())
+        if not lib:isRoot() then table.insert(entry_names, "..") end
+        return choice(last_part, entry_names)
+    end
+
+    return {}
+end
+
+--------------------------------------------------
 
 local function handleUI()
     local history = {}
-    while true do
+    while running do
         for i = 1, height - 1 do
             screen.setCursorPos(1, i)
             screen.clearLine()
@@ -81,37 +146,21 @@ local function handleUI()
 
         printDirectory()
         screen.write("> ")
-        local command = read(nil, history)
+        local command = read(nil, history, promptOptions)
         local iter = string.gmatch(command, "%S+")
         local first_part = iter()
-        local save = true
 
         if string.sub(command, 1, 1) ~= "`" then
             local succ, errtxt = lib:changeDirectory(command)
             if succ then writeStatus("", false)
             else writeStatus(errtxt, true) save = false end
-        elseif first_part == "`add" then
-            local fname = iter()
-            local ftype = lib:getEntryType(fname)
-            if not ftype then writeStatus("Catalog not found!", true)
-            elseif ftype ~= "cat" then writeStatus("Not a catalog!", true)
-            else
-                local cname, errtxt = lib:addCatalog(fname)
-                if cname ~= nil then
-                    writeStatus(string.format("Added \"%s\" to the local catalogs.", cname), false)
-                else writeStatus(errtxt, true) save = false end
-            end
-        elseif first_part == "`exit" then
-            writeStatus("", false)
-            break
-        elseif first_part == "`play" then
-            if playing then writeStatus("Player is already active!", true)
-            else os.queueEvent("cccdn_start", iter()) end
-        elseif first_part == "`stop" then
-            if not playing then writeStatus("Player is already stopped!", true)
-            else os.queueEvent("cccdn_stop") end
-        else writeStatus("Unknown command!", true) save = false end
-        if save and history[#history] ~= command then
+        else
+            local cmd_func = commands[string.sub(first_part, 2, -1)]
+            if not cmd_func then writeStatus("Unknown command!", true)
+            else cmd_func(iter) end
+        end
+
+        if history[#history] ~= command then
             table.insert(history, command)
         end
     end
