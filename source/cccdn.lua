@@ -1,5 +1,6 @@
-local lib, errtxt = require("libcdn")("/libcdn/", "main")
-if not lib then printError(errtxt) return end
+local vfs, errtxt = require("libcdn")("/libcdn/", "main")
+if not vfs then printError(errtxt) return end
+
 local screen = term.current()
 local width, height = screen.getSize()
 
@@ -11,6 +12,7 @@ local type_colors = {
     ["cat"] = colors.blue,
     ["dir"] = colors.lightBlue,
     ["pwm"] = colors.lime,
+    ["qoa"] = colors.lime,
     ["lua"] = colors.yellow
 }
 
@@ -32,7 +34,7 @@ local function writeStatus(str, err)
 end
 
 local function printDirectory()
-    local path = lib:getPath()
+    local path = vfs:getPath()
     local start = #path - width + 1
     if start > 0 then  path = string.sub(path, start, #path) end
 
@@ -43,7 +45,7 @@ local function printDirectory()
     )
 
     local line = 2
-    local dir = lib:getEntries()
+    local dir = vfs:getEntries()
 
     local names = {}
     for n,t in pairs(dir) do table.insert(names, n) end
@@ -83,11 +85,11 @@ end
 
 function commands.add(iter)
     local fname = iter()
-    local ftype = lib:getEntryType(fname)
+    local ftype = vfs:getEntryType(fname)
     if not ftype then writeStatus("Catalog not found!", true)
     elseif ftype ~= "cat" then writeStatus("Not a catalog!", true)
     else
-        local cname, errtxt = lib:addCatalog(fname)
+        local cname, errtxt = vfs:addCatalog(fname)
         if cname ~= nil then
             writeStatus(string.format("Added \"%s\" to the local catalogs.", cname), false)
         else writeStatus(errtxt, true) save = false end
@@ -126,8 +128,8 @@ local function promptOptions(input)
         local command_names = keyset(commands)
         return choice(string.sub(last_part, 2, -1), command_names)
     else
-        local entry_names = keyset(lib:getEntries())
-        if not lib:isRoot() then table.insert(entry_names, "..") end
+        local entry_names = keyset(vfs:getEntries())
+        if not vfs:isRoot() then table.insert(entry_names, "..") end
         return choice(last_part, entry_names)
     end
 
@@ -151,7 +153,7 @@ local function handleUI()
         local first_part = iter()
 
         if string.sub(command, 1, 1) ~= "`" then
-            local succ, errtxt = lib:changeDirectory(command)
+            local succ, errtxt = vfs:changeDirectory(command)
             if succ then writeStatus("", false)
             else writeStatus(errtxt, true) save = false end
         else
@@ -167,28 +169,43 @@ local function handleUI()
 end
 
 local function handleMusic()
+    local decoders = {}
+
+    decoders["pwm"] = function(handle)
+        local pwm = require("cc.audio.dfpwm").make_decoder()
+        return function()
+            local bytes = handle.read(16384)
+            if bytes == nil then return nil end
+            return pwm(bytes)
+        end
+    end
+
+    decoders["qoa"] = function(handle)
+        return require("libqoa").makeDecoder(handle)
+    end
+
     while true do while true do
         playing = false
         local _, fname = os.pullEvent("cccdn_start")
         playing = true
-        local ftype = lib:getEntryType(fname)
-        if not ftype then writeStatus("File not found!", true) break
-        elseif ftype ~= "pwm" then writeStatus("Not a sound file!", true) break end
 
-        local handle, ftype = lib:getFile(fname)
+        local ftype = vfs:getEntryType(fname)
+        if not ftype then writeStatus("File not found!", true) break end
+
+        local decoder = decoders[ftype]
+        if not decoder then writeStatus("Not a sound file!", true) break end
+
+        local handle, ftype = vfs:getFile(fname)
         if not handle then writeStatus(ftype, true) break end
-        assert(ftype == "pwm")
 
         local speaker = getSpeaker()
         if not speaker then writeStatus("No speaker attached!", true) break
         else writeStatus(string.format("Playing \"%s\" ...", fname), false) end
-        local decoder = require("cc.audio.dfpwm").make_decoder()
-        while playing do
-            local bytes = handle.read(16384)
-            if bytes == nil then break end
 
-            local data = decoder(bytes)
-            while not speaker.playAudio(data) do
+        local callback = decoder(handle)
+        while playing do
+            local data = callback()
+            while not speaker.playAudio(data, 3) do
                 while true do
                     local event_data = {os.pullEvent()}
                     local event = event_data[1]
@@ -197,6 +214,7 @@ local function handleMusic()
                 end
             end
         end
+
         writeStatus("Finished playing.", false)
         handle.close()
         speaker.stop()

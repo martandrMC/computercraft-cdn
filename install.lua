@@ -3,13 +3,23 @@
 -- chosen due to its presence in all ComputerCraft computers.
 
 local tasks = {
-    { type = "download", file = "/libcdn.lua", location = "/libcdn.lua"},
     {
-        type = "execute", description = "Initialise LibCDN folder structure",
+        type = "download",
+        file = "/source/libcdn.lua",
+        location = "/libcdn.lua"
+    }, {
+        type = "execute",
+        description = "Initialise LibCDN folder structure",
         code = "loadfile(\"/libcdn.lua\")()(\"/libcdn\", \"\")"
-    },
-    { type = "download", file = "/cccdn.lua", location = "/cccdn.lua"},
-    { type = "download", file = "/main.cat.ref", location = "/libcdn/catalogs/main.cat"}
+    }, {
+        type = "download",
+        file = "/source/cccdn.lua",
+        location = "/cccdn.lua"
+    }, {
+        type = "download",
+        file = "/source/main.cat.ref",
+        location = "/libcdn/catalogs/main.cat"
+    }
 }
 
 local function taskDownload(file, location)
