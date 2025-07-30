@@ -13,6 +13,10 @@ local tasks = {
         code = "loadfile(\"/libcdn.lua\")()(\"/libcdn\", \"\")"
     }, {
         type = "download",
+        file = "/source/libqoa.lua",
+        location = "/libqoa.lua"
+    }, {
+        type = "download",
         file = "/source/cccdn.lua",
         location = "/cccdn.lua"
     }, {
