@@ -205,6 +205,8 @@ local function handleMusic()
         local callback = decoder(handle)
         while playing do
             local data = callback()
+            if not data then break end
+
             while not speaker.playAudio(data, 3) do
                 while true do
                     local event_data = {os.pullEvent()}
