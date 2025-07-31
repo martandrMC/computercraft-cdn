@@ -171,16 +171,16 @@ end
 local function handleMusic()
     local decoders = {}
 
-    decoders["pwm"] = function(handle)
-        local pwm = require("cc.audio.dfpwm").make_decoder()
+    decoders["pwm"] = function (handle)
+        local decoder = require("cc.audio.dfpwm").make_decoder()
         return function()
             local bytes = handle.read(16384)
             if bytes == nil then return nil end
-            return pwm(bytes)
+            return decoder(bytes)
         end
     end
 
-    decoders["qoa"] = function(handle)
+    decoders["qoa"] = function (handle)
         return require("libqoa").makeDecoder(handle)
     end
 
@@ -203,17 +203,19 @@ local function handleMusic()
         else writeStatus(string.format("Playing \"%s\" ...", fname), false) end
 
         local callback = decoder(handle)
-        while playing do
-            local data = callback()
-            if not data then break end
+        local data = callback()
+        if not data then break end
 
-            while not speaker.playAudio(data, 3) do
-                while true do
-                    local event_data = {os.pullEvent()}
-                    local event = event_data[1]
-                    if event == "speaker_audio_empty" then break
-                    elseif event == "cccdn_stop" then playing = false break end
-                end
+        while playing do
+            if not data then break end
+            speaker.playAudio(data, 3)
+            data = callback()
+
+            while true do
+                local event_data = { os.pullEvent() }
+                local event = event_data[1]
+                if event == "speaker_audio_empty" then break
+                elseif event == "cccdn_stop" then playing = false break end
             end
         end
 
