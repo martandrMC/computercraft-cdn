@@ -11,7 +11,7 @@ local base_color = colors.blue
 local type_colors = {
     ["cat"] = colors.blue,
     ["dir"] = colors.lightBlue,
-    ["pwm"] = colors.lime,
+    ["pwm"] = colors.green,
     ["qoa"] = colors.lime,
     ["lua"] = colors.yellow
 }
