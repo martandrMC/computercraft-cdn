@@ -174,7 +174,7 @@ local function handleMusic()
     decoders["pwm"] = function (handle)
         local decoder = require("cc.audio.dfpwm").make_decoder()
         return function()
-            local bytes = handle.read(16384)
+            local bytes = handle.read(1024)
             if bytes == nil then return nil end
             return decoder(bytes)
         end
@@ -196,7 +196,7 @@ local function handleMusic()
         if not decoder then writeStatus("Not a sound file!", true) break end
 
         local handle, ftype = vfs:getFile(fname)
-        if not handle then writeStatus(ftype, true) break end
+        if not handle then writeStatus("Filesystem error!", true) break end
 
         local speaker = getSpeaker()
         if not speaker then writeStatus("No speaker attached!", true) break
@@ -204,7 +204,7 @@ local function handleMusic()
 
         local callback = decoder(handle)
         local data = callback()
-        if not data then break end
+        if not data then writeStatus("Empty audio stream!", true) break end
 
         while playing do
             if not data then break end
@@ -215,13 +215,16 @@ local function handleMusic()
                 local event_data = { os.pullEvent() }
                 local event = event_data[1]
                 if event == "speaker_audio_empty" then break
-                elseif event == "cccdn_stop" then playing = false break end
+                elseif event == "cccdn_stop" then
+                    playing = false
+                    speaker.stop()
+                    break
+                end
             end
         end
 
         writeStatus("Finished playing.", false)
         handle.close()
-        speaker.stop()
     end end
 end
 
