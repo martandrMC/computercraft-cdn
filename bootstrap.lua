@@ -1,7 +1,7 @@
 local function errmsg(msg)
-    printError("Bootstrap failure!")
-    printError(msg)
-    error()
+	printError("Bootstrap failure!")
+	printError(msg)
+	error()
 end
 
 local link = "https://raw.githubusercontent.com/martandrMC/computercraft-cdn/master/install.lua"
