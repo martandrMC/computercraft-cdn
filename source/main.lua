@@ -1,4 +1,5 @@
-local vfs, errtxt = require("libcdn")("/libcdn/", "main")
+local mypath = fs.getDir(shell.getRunningProgram())
+local vfs, errtxt = require("libcdn")(mypath .. "/libcdn/", "main")
 if not vfs then printError(errtxt) return end
 
 local screen = term.current()

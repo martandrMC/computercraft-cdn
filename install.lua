@@ -6,25 +6,43 @@ local tasks = {
 	{
 		type = "download",
 		file = "/source/libcdn.lua",
-		location = "/libcdn.lua"
-	}, {
-		type = "execute",
-		description = "Initialise LibCDN folder structure",
-		code = "loadfile(\"/libcdn.lua\")()(\"/libcdn\", \"\")"
-	}, {
-		type = "download",
-		file = "/source/libqoa.lua",
-		location = "/libqoa.lua"
-	}, {
-		type = "download",
-		file = "/source/cccdn.lua",
-		location = "/cccdn.lua"
+		location = "/cccdn/libcdn/init.lua"
 	}, {
 		type = "download",
 		file = "/source/main.cat.ref",
-		location = "/libcdn/catalogs/main.cat"
+		location = "/cccdn/libcdn/catalogs/main.cat"
+	}, {
+		type = "download",
+		file = "/source/libqoa.lua",
+		location = "/cccdn/libqoa.lua"
+	}, {
+		type = "download",
+		file = "/source/main.lua",
+		location = "/cccdn/main.lua"
+	}, {
+		type = "execute",
+		description = "Add Alias To Startup",
+		code = [[ addAlias("cdn", "/cccdn/main.lua") ]]
+	}, {
+		type = "execute",
+		description = "Finalize Aliases",
+		code = [[ finalizeAliases() ]]
 	}
 }
+
+local env = {}
+function env.addAlias(name, target)
+	if settings.get("cccdn.installed_aliases") then return end
+	local file = fs.open("/startup.lua", "a")
+	local chunk = string.format("shell.setAlias(\"%s\", \"%s\")", name, target)
+	file.writeLine(chunk)
+	file.close()
+end
+
+function env.finalizeAliases()
+	settings.set("cccdn.installed_aliases", true)
+	settings.save()
+end
 
 local function taskDownload(file, location)
 	local link_prefix = "https://raw.githubusercontent.com/martandrMC/computercraft-cdn/master"
@@ -45,7 +63,7 @@ end
 
 local function taskExecute(description, code)
 	write(string.format("Performing execute task \"%s\" ... ", description))
-	local chunk, errtxt = loadstring(code)
+	local chunk, errtxt = load(code, description, "t", env)
 	if not code then printError("Fail!") return false end
 	chunk()
 	print("Success!")
