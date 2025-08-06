@@ -200,6 +200,7 @@ local function handleMusic()
 		local speakers = { peripheral.find("speaker") }
 		if #speakers == 0 then writeStatus("No speakers attached!", true) break
 		else writeStatus(string.format("Playing \"%s\" ...", fname), false) end
+		local main_speaker = peripheral.getName(speakers[1])
 		local volume = getSetting("player.volume", 3)
 
 		local callback = decoder(handle)
@@ -214,7 +215,8 @@ local function handleMusic()
 			while true do
 				local event_data = { os.pullEvent() }
 				local event = event_data[1]
-				if event == "speaker_audio_empty" then break
+				if event == "speaker_audio_empty" then
+					if event_data[2] == main_speaker then break end
 				elseif event == "cccdn_stop" then
 					playing = false
 					for _, s in ipairs(speakers) do s.stop() end
