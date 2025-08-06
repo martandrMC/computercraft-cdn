@@ -69,10 +69,38 @@ local function printDirectory()
 	screen.setCursorPos(1, height - 1)
 end
 
-local function getSpeaker()
-	local speakers = { peripheral.find("speaker") }
-	if #speakers == 0 then return nil end
-	return speakers[1]
+local function promptOptions(input)
+	local choice = require("cc.completion").choice
+	local function keyset(tbl)
+		local keys = {}
+		for k,v in pairs(tbl) do
+			table.insert(keys, k)
+		end
+		table.sort(keys)
+		return keys
+	end
+
+	if not input or #input == 0 then return {} end
+
+	local last_part = {}
+	for p in string.gmatch(input, "%S+") do last_part = p end
+
+	if string.sub(last_part, 1, 1) == "`" then
+		local command_names = keyset(commands)
+		return choice(string.sub(last_part, 2, -1), command_names)
+	else
+		local entry_names = keyset(vfs:getEntries())
+		if not vfs:isRoot() then table.insert(entry_names, "..") end
+		return choice(last_part, entry_names)
+	end
+
+	return {}
+end
+
+local function getSetting(name, default)
+	local value = settings.get("cccdn." .. name)
+	if value == nil then value = default end
+	return value
 end
 
 --------------------------------------------------
@@ -105,36 +133,6 @@ end
 function commands.stop(iter)
 	if not playing then writeStatus("Player is already stopped!", true)
 	else os.queueEvent("cccdn_stop") end
-end
-
---------------------------------------------------
-
-local function promptOptions(input)
-	local choice = require("cc.completion").choice
-	local function keyset(tbl)
-		local keys = {}
-		for k,v in pairs(tbl) do
-			table.insert(keys, k)
-		end
-		table.sort(keys)
-		return keys
-	end
-
-	if not input or #input == 0 then return {} end
-
-	local last_part = {}
-	for p in string.gmatch(input, "%S+") do last_part = p end
-
-	if string.sub(last_part, 1, 1) == "`" then
-		local command_names = keyset(commands)
-		return choice(string.sub(last_part, 2, -1), command_names)
-	else
-		local entry_names = keyset(vfs:getEntries())
-		if not vfs:isRoot() then table.insert(entry_names, "..") end
-		return choice(last_part, entry_names)
-	end
-
-	return {}
 end
 
 --------------------------------------------------
@@ -199,9 +197,10 @@ local function handleMusic()
 		local handle, ftype = vfs:getFile(fname)
 		if not handle then writeStatus("Filesystem error!", true) break end
 
-		local speaker = getSpeaker()
-		if not speaker then writeStatus("No speaker attached!", true) break
+		local speakers = { peripheral.find("speaker") }
+		if #speakers == 0 then writeStatus("No speakers attached!", true) break
 		else writeStatus(string.format("Playing \"%s\" ...", fname), false) end
+		local volume = getSetting("player.volume", 3)
 
 		local callback = decoder(handle)
 		local data = callback()
@@ -209,7 +208,7 @@ local function handleMusic()
 
 		while playing do
 			if not data then break end
-			speaker.playAudio(data, 3)
+			for _, s in ipairs(speakers) do s.playAudio(data, volume) end
 			data = callback()
 
 			while true do
@@ -218,7 +217,7 @@ local function handleMusic()
 				if event == "speaker_audio_empty" then break
 				elseif event == "cccdn_stop" then
 					playing = false
-					speaker.stop()
+					for _, s in ipairs(speakers) do s.stop() end
 					break
 				end
 			end
