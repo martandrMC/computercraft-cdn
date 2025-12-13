@@ -58,7 +58,7 @@ local function parsePath(path)
 	else result.relative = (string.sub(path, 1, 1) ~= "/") end
 
 	result.directories = {}
-	if string.find(path, "/") ~= nill then
+	if string.find(path, "/") ~= nil then
 		local iter = string.gmatch(path, "[^/]+")
 		while true do
 			local part = iter()
